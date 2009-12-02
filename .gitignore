@@ -1,0 +1,10 @@
+*.o
+*~
+CVS.ignore
+autom4te.cache
+.deps
+stamp-*
+par2
+config.log
+config.status
+config.h
