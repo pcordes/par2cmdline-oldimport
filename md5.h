@@ -39,7 +39,7 @@ class MD5Hash
 {
 public:
   // Constructor does not initialise the value
-  MD5Hash(void) {};
+//  MD5Hash(void) {};
 
   // Comparison operators
   bool operator==(const MD5Hash &other) const;
@@ -55,8 +55,8 @@ public:
   string print(void) const;
 
   // Copy and assignment
-  MD5Hash(const MD5Hash &other);
-  MD5Hash& operator=(const MD5Hash &other);
+//  MD5Hash(const MD5Hash &other);	// old: used memcpy
+//  MD5Hash& operator=(const MD5Hash &other);
 
 public:
   u8 hash[16]; // 16 byte MD5 Hash value
@@ -128,7 +128,7 @@ inline bool MD5Hash::operator<(const MD5Hash &other) const
   {
     index--;
   }
-
+  // TODO: memcmp?
   return hash[index] < other.hash[index];
 }
 inline bool MD5Hash::operator>=(const MD5Hash &other) const 
@@ -143,17 +143,4 @@ inline bool MD5Hash::operator<=(const MD5Hash &other) const
 {
   return !other.operator<(*this);
 }
-
-inline MD5Hash::MD5Hash(const MD5Hash &other)
-{
-  memcpy(&hash, &other.hash, sizeof(hash));
-}
-
-inline MD5Hash& MD5Hash::operator=(const MD5Hash &other)
-{
-  memcpy(&hash, &other.hash, sizeof(hash));
-
-  return *this;
-}
-
 #endif // __MD5_H__

@@ -29,20 +29,6 @@ static char THIS_FILE[]=__FILE__;
 
 // Convert hash values to hex
 
-ostream& operator<<(ostream &result, const MD5Hash &h)
-{
-  char buffer[33];
-
-  sprintf(buffer, 
-          "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-          h.hash[15], h.hash[14], h.hash[13], h.hash[12],
-          h.hash[11], h.hash[10], h.hash[9],  h.hash[8],
-          h.hash[7],  h.hash[6],  h.hash[5],  h.hash[4],
-          h.hash[3],  h.hash[2],  h.hash[1],  h.hash[0]);
-
-  return result << buffer;
-}
-
 string MD5Hash::print(void) const
 {
   char buffer[33];
@@ -56,6 +42,12 @@ string MD5Hash::print(void) const
 
   return buffer;
 }
+
+ostream& operator<<(ostream &result, const MD5Hash &h)
+{
+  return result << h.print();
+}
+
 
 MD5State::MD5State(void)
 {
