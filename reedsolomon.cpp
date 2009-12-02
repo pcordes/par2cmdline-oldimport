@@ -101,30 +101,22 @@ template<> bool ReedSolomon<Galois8>::SetInput(u32 count)
   return true;
 }
 
-template<> bool ReedSolomon<Galois8>::InternalProcess(const Galois8 &factor, size_t size, const void *inputbuffer, void *outputbuffer)
+template<> bool ReedSolomon<Galois8>::InternalProcess(const Galois8 factor, size_t size, const void *inputbuffer, void *outputbuffer)
 {
-#ifdef LONGMULTIPLY
+#ifdef LONGMULTIPLY  // Based on the Galois16 version, stripped down.  just lookups in a fully pre-computed multiplication table
   // The 8-bit long multiplication tables
   Galois8 *table = glmt->tables;
 
   // Split the factor into Low and High bytes
-  unsigned int fl = (factor >> 0) & 0xff;
+  unsigned int fl = (factor.Value() >> 0) & 0xff;
 
-  // Get the four separate multiplication tables
   Galois8 *LL = &table[(0*256 + fl) * 256 + 0]; // factor.low  * source.low
 
-  // Combine the four multiplication tables into two
   unsigned int L[256];
-
   unsigned int *pL = &L[0];
-
   for (unsigned int i=0; i<256; i++)
-  {
-    *pL = *LL;
+    *pL++ = (*LL++).Value();	// expand the bytes to 32bits, for no reason
 
-    pL++;
-    LL++;
-  }
 
   // Treat the buffers as arrays of 32-bit unsigned ints.
   u32 *src4 = (u32 *)inputbuffer;
@@ -136,7 +128,7 @@ template<> bool ReedSolomon<Galois8>::InternalProcess(const Galois8 &factor, siz
   {
     u32 s = *src4++;
 
-    // Use the two lookup tables computed earlier
+    // Use the lookup table
     *dst4++ ^= (L[(s >> 0) & 0xff]      )
             ^  (L[(s >> 8) & 0xff] << 8 )
             ^  (L[(s >> 16)& 0xff] << 16)
@@ -158,7 +150,7 @@ template<> bool ReedSolomon<Galois8>::InternalProcess(const Galois8 &factor, siz
     }
   }
 #else
-  // Treat the buffers as arrays of 16-bit Galois values.
+  // Treat the buffers as arrays of 8-bit Galois values.
 
   Galois8 *src = (Galois8 *)inputbuffer;
   Galois8 *end = (Galois8 *)&((u8*)inputbuffer)[size];
@@ -260,21 +252,34 @@ template<> bool ReedSolomon<Galois16>::SetInput(u32 count)
   return true;
 }
 
-template<> bool ReedSolomon<Galois16>::InternalProcess(const Galois16 &factor, size_t size, const void *inputbuffer, void *outputbuffer)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define le16_to_cpu(x) (x)
+#define cpu_to_le16(x) (x)
+#elif __BYTE_ORDER == __BIG_ENDIAN
+static inline u16 le16_to_cpu(u16 temp) { return (temp >> 8) & 0xff | (temp << 8) & 0xff00; }
+#define cpu_to_le16 le16_to_cpu
+#endif
+// TODO: get the implementation from linux byteorder.h or whatever it is.
+// Or not, telling the compiler about our byteswapping is probably optimal
+// using an inline asm bswap or whatever would hide the data movement from the compiler.
+
+
+template<> bool ReedSolomon<Galois16>::InternalProcess(const Galois16 factor, size_t size, const void *inputbuffer, void *outputbuffer)
 {
+//#undef LONGMULTIPLY
 #ifdef LONGMULTIPLY
   // The 8-bit long multiplication tables
-  Galois16 *table = glmt->tables;
+  const Galois16 *table = glmt->tables;
 
   // Split the factor into Low and High bytes
-  unsigned int fl = (factor >> 0) & 0xff;
-  unsigned int fh = (factor >> 8) & 0xff;
+  unsigned int fl = (factor.Value() >> 0) & 0xff;
+  unsigned int fh = (factor.Value() >> 8) & 0xff;
 
   // Get the four separate multiplication tables
-  Galois16 *LL = &table[(0*256 + fl) * 256 + 0]; // factor.low  * source.low
-  Galois16 *LH = &table[(1*256 + fl) * 256 + 0]; // factor.low  * source.high
-  Galois16 *HL = &table[(1*256 + 0) * 256 + fh]; // factor.high * source.low
-  Galois16 *HH = &table[(2*256 + fh) * 256 + 0]; // factor.high * source.high
+  const Galois16 *LL = &table[(0*256 + fl) * 256 + 0]; // factor.low  * source.low
+  const Galois16 *LH = &table[(1*256 + fl) * 256 + 0]; // factor.low  * source.high
+  const Galois16 *HL = &table[(1*256 + 0) * 256 + fh]; // factor.high * source.low
+  const Galois16 *HH = &table[(2*256 + fh) * 256 + 0]; // factor.high * source.high
 
   // Combine the four multiplication tables into two
   unsigned int L[256];
@@ -290,27 +295,11 @@ template<> bool ReedSolomon<Galois16>::InternalProcess(const Galois16 &factor, s
 
   for (unsigned int i=0; i<256; i++)
   {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    *pL = *LL + *HL;
-#else
-    unsigned int temp = *LL + *HL;
-    *pL = (temp >> 8) & 0xff | (temp << 8) & 0xff00;
-#endif
+    *pL = cpu_to_le16( (*LL + *HL).Value() );
+    pL++;    LL++;    HL+=256;
 
-    pL++;
-    LL++;
-    HL+=256;
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    *pH = *LH + *HH;
-#else
-    temp = *LH + *HH;
-    *pH = (temp >> 8) & 0xff | (temp << 8) & 0xff00;
-#endif
-
-    pH++;
-    LH++;
-    HH++;
+    *pH = cpu_to_le16( (*LH + *HH).Value() );
+    pH++;    LH++;    HH++;
   }
 
   // Treat the buffers as arrays of 32-bit unsigned ints.
@@ -324,7 +313,7 @@ template<> bool ReedSolomon<Galois16>::InternalProcess(const Galois16 &factor, s
     u32 s = *src++;
 
     // Use the two lookup tables computed earlier
-//#if __BYTE_ORDER == __LITTLE_ENDIAN
+//#if __BYTE_ORDER == __LITTLE_ENDIAN	// in the BE case, things are swapped around so this is still right.
     u32 d = *dst ^ (L[(s >> 0) & 0xff]      )
                  ^ (H[(s >> 8) & 0xff]      )
                  ^ (L[(s >> 16)& 0xff] << 16)
@@ -340,15 +329,18 @@ template<> bool ReedSolomon<Galois16>::InternalProcess(const Galois16 &factor, s
 #else
   // Treat the buffers as arrays of 16-bit Galois values.
 
-  // BUG: This only works for __LITTLE_ENDIAN
-  Galois16 *src = (Galois16 *)inputbuffer;
-  Galois16 *end = (Galois16 *)&((u8*)inputbuffer)[size];
-  Galois16 *dst = (Galois16 *)outputbuffer;
+  const u16 *src = (const u16*)inputbuffer;
+  const u16 *end = (const u16*)&((const u8*)inputbuffer)[size];
+  u16 *dst = (u16*) outputbuffer;
 
   // Process the data
   while (src < end)
   {
-    *dst++ += *src++ * factor;
+      Galois16 stmp = Galois16(le16_to_cpu(*src));
+      Galois16 dtmp = Galois16(le16_to_cpu(*dst));
+      Galois16 newval = dtmp + stmp * factor;
+      *dst = cpu_to_le16(newval.Value());
+      ++dst; ++src;
   }
 #endif
 

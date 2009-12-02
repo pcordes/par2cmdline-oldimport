@@ -65,7 +65,7 @@ public:
                u32 outputindex,         // The row in the RS matrix
                void *outputbuffer);     // Buffer containing output data
 private:
-		bool InternalProcess(const g &factor, size_t size, const void *inputbuffer, void *outputbuffer);	// Optimization
+		bool InternalProcess(const g factor, size_t size, const void *inputbuffer, void *outputbuffer);	// the non-inlined part, specialied for Galois8 and Galois16 with LONGMULTIPLY
 protected:
   // Perform Gaussian Elimination
   bool GaussElim(CommandLine::NoiseLevel noiselevel,
@@ -363,12 +363,9 @@ inline bool ReedSolomon<g>::Compute(CommandLine::NoiseLevel noiselevel)
   return true;
 }
 
-// Use Gaussian Elimination to solve the matrices
-template<class g>
-inline bool ReedSolomon<g>::GaussElim(CommandLine::NoiseLevel noiselevel, unsigned int rows, unsigned int leftcols, G *leftmatrix, G *rightmatrix, unsigned int datamissing)
+template<class G>
+void debug_PrintMatrix(unsigned int rows, unsigned int leftcols, G *leftmatrix, G *rightmatrix)
 {
-  if (noiselevel == CommandLine::nlDebug)
-  {
     for (unsigned int row=0; row<rows; row++)
     {
       cout << ((row==0) ? "/"    : (row==rows-1) ? "\\"    : "|");
@@ -376,21 +373,29 @@ inline bool ReedSolomon<g>::GaussElim(CommandLine::NoiseLevel noiselevel, unsign
       {
         cout << " "
              << hex << setw(G::Bits>8?4:2) << setfill('0')
-             << (unsigned int)leftmatrix[row*leftcols+col];
+             << leftmatrix[row*leftcols+col].Value();
       }
       cout << ((row==0) ? " \\ /" : (row==rows-1) ? " / \\" : " | |");
       for (unsigned int col=0; col<rows; col++)
       {
         cout << " "
              << hex << setw(G::Bits>8?4:2) << setfill('0')
-             << (unsigned int)rightmatrix[row*rows+col];
+             << rightmatrix[row*rows+col].Value();
       }
       cout << ((row==0) ? " \\"   : (row==rows-1) ? " /"    : " | |");
       cout << endl;
 
       cout << dec << setw(0) << setfill(' ');
     }
-  }
+}
+
+// Use Gaussian Elimination to solve the matrices
+template<class g>
+inline bool ReedSolomon<g>::GaussElim(CommandLine::NoiseLevel noiselevel, unsigned int rows, unsigned int leftcols, G *leftmatrix, G *rightmatrix, unsigned int datamissing)
+{
+  if (noiselevel == CommandLine::nlDebug)
+      debug_PrintMatrix(rows, leftcols, leftmatrix, rightmatrix);
+
 
   // Because the matrices being operated on are Vandermonde matrices
   // they are guaranteed not to be singular.
@@ -503,29 +508,7 @@ inline bool ReedSolomon<g>::GaussElim(CommandLine::NoiseLevel noiselevel, unsign
   if (noiselevel > CommandLine::nlQuiet)
     cout << "Solving: done." << endl;
   if (noiselevel == CommandLine::nlDebug)
-  {
-    for (unsigned int row=0; row<rows; row++)
-    {
-      cout << ((row==0) ? "/"    : (row==rows-1) ? "\\"    : "|");
-      for (unsigned int col=0; col<leftcols; col++)
-      {
-        cout << " "
-             << hex << setw(G::Bits>8?4:2) << setfill('0')
-             << (unsigned int)leftmatrix[row*leftcols+col];
-      }
-      cout << ((row==0) ? " \\ /" : (row==rows-1) ? " / \\" : " | |");
-      for (unsigned int col=0; col<rows; col++)
-      {
-        cout << " "
-             << hex << setw(G::Bits>8?4:2) << setfill('0')
-             << (unsigned int)rightmatrix[row*rows+col];
-      }
-      cout << ((row==0) ? " \\"   : (row==rows-1) ? " /"    : " | |");
-      cout << endl;
-
-      cout << dec << setw(0) << setfill(' ');
-    }
-  }
+      debug_PrintMatrix(rows, leftcols, leftmatrix, rightmatrix);
 
   return true;
 }

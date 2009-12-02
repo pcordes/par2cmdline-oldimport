@@ -61,7 +61,7 @@ public:
 
   // Basic constructors
   Galois(void) {};
-  Galois(ValueType v);
+  Galois(ValueType v) : value(v) {};
 
   // Copy and assignment
   Galois(const Galois &right) {value = right.value;}
@@ -85,11 +85,13 @@ public:
 
   // Power
   Galois pow(unsigned int right) const;
-  Galois operator ^ (unsigned int right) const;
-  Galois& operator ^= (unsigned int right);
+//  Galois operator ^ (unsigned int right) const;
+//  Galois& operator ^= (unsigned int right);
 
   // Cast to value and value access
-  operator ValueType(void) const {return value;}
+//  operator ValueType(void) const {return value;}  // recipe for confusion
+  bool operator !=(ValueType right) { return value != right; }
+  bool operator ==(ValueType right) { return value == right; }
   ValueType Value(void) const {return value;}
 
   // Direct log and antilog
@@ -155,10 +157,12 @@ template <const unsigned int bits, const unsigned int generator, typename valuet
 GaloisTable<bits,generator,valuetype> Galois<bits,generator,valuetype>::table;
 
 
+
+
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
-inline Galois<bits,generator,valuetype>::Galois(typename Galois<bits,generator,valuetype>::ValueType v)
-{
-  value = v;
+inline Galois<bits,generator,valuetype>& Galois<bits,generator,valuetype>::operator *= (const Galois<bits,generator,valuetype> &right)
+{ 
+  return *this = *this * right;
 }
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
@@ -166,37 +170,16 @@ inline Galois<bits,generator,valuetype> Galois<bits,generator,valuetype>::operat
 { 
   if (value == 0 || right.value == 0) return 0;
   unsigned int sum = table.log[value] + table.log[right.value];
-  if (sum >= Limit) 
-  {
+  if (sum >= Limit) // can eliminate this branch by extending table to double length
     return table.antilog[sum-Limit];
-  }
   else
-  {
     return table.antilog[sum];
-  }
 }
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
-inline Galois<bits,generator,valuetype>& Galois<bits,generator,valuetype>::operator *= (const Galois<bits,generator,valuetype> &right)
+inline Galois<bits,generator,valuetype>& Galois<bits,generator,valuetype>::operator /= (const Galois<bits,generator,valuetype> &right)
 { 
-  if (value == 0 || right.value == 0) 
-  {
-    value = 0;
-  }
-  else
-  {
-    unsigned int sum = table.log[value] + table.log[right.value];
-    if (sum >= Limit) 
-    {
-      value = table.antilog[sum-Limit];
-    }
-    else
-    {
-      value = table.antilog[sum];
-    }
-  }
-
-  return *this;
+  return *this = *this / right;
 }
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
@@ -208,35 +191,10 @@ inline Galois<bits,generator,valuetype> Galois<bits,generator,valuetype>::operat
   if (right.value == 0) {return 0;} // Division by 0!
 
   int sum = table.log[value] - table.log[right.value];
-  if (sum < 0) 
-  {
+  if (sum < 0) // can eliminate this branch by extending table into negative indices
     return table.antilog[sum+Limit];
-  }
   else
-  {
     return table.antilog[sum];
-  }
-}
-
-template <const unsigned int bits, const unsigned int generator, typename valuetype>
-inline Galois<bits,generator,valuetype>& Galois<bits,generator,valuetype>::operator /= (const Galois<bits,generator,valuetype> &right)
-{ 
-  if (value == 0) return *this;
-
-  assert(right.value != 0);
-  if (right.value == 0) {return *this;} // Division by 0!
-
-  int sum = table.log[value] - table.log[right.value];
-  if (sum < 0) 
-  {
-    value = table.antilog[sum+Limit];
-  }
-  else
-  {
-    value = table.antilog[sum];
-  }
-
-  return *this;
 }
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
@@ -248,55 +206,30 @@ inline Galois<bits,generator,valuetype> Galois<bits,generator,valuetype>::pow(un
   unsigned int sum = table.log[value] * right;
 
   sum = (sum >> Bits) + (sum & Limit);
-  if (sum >= Limit) 
-  {
+  if (sum >= Limit) // is one subtraction of Limit enough?  probably with the right shift
     return table.antilog[sum-Limit];
-  }
   else
-  {
     return table.antilog[sum];
-  }  
 }
 
+// highly questionable whether this operator overload is a good idea, since we use ^ all over the place to xor ints
+// fortunately the are unused.
+/*
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
 inline Galois<bits,generator,valuetype> Galois<bits,generator,valuetype>::operator ^ (unsigned int right) const
 {
-  if (right == 0) return 1;
-  if (value == 0) return 0;
-
-  unsigned int sum = table.log[value] * right;
-
-  sum = (sum >> Bits) + (sum & Limit);
-  if (sum >= Limit) 
-  {
-    return table.antilog[sum-Limit];
-  }
-  else
-  {
-    return table.antilog[sum];
-  }  
+    return this->pow(right);
 }
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
 inline Galois<bits,generator,valuetype>& Galois<bits,generator,valuetype>::operator ^= (unsigned int right)
 {
-  if (right == 1) {value = 1; return *this;}
+  if (right == 1) {value = 1; return *this;}	// FIXME: shouldn't this test right == 0, like pow and ^?
   if (value == 0) return *this;
 
-  unsigned int sum = table.log[value] * right;
-
-  sum = (sum >> Bits) + (sum & Limit);
-  if (sum >= Limit) 
-  {
-    value = table.antilog[sum-Limit];
-  }
-  else
-  {
-    value = table.antilog[sum];
-  }
-
-  return *this;
+  return *this = *this->pow(right);
 }
+*/
 
 template <const unsigned int bits, const unsigned int generator, typename valuetype>
 inline valuetype Galois<bits,generator,valuetype>::Log(void) const
