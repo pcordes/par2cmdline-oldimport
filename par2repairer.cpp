@@ -121,13 +121,7 @@ Par2Repairer::Par2Repairer(void)
 	pthread_mutex_init (&progressMutex, NULL);
 	pthread_mutex_init (&fileIteratorMutex, NULL);
 	// Go and find out the number of CPU's
-	int lName [2] = { CTL_HW, HW_NCPU };
-	size_t lLen = sizeof (numCPUs);
-	if (sysctl(lName, 2, &numCPUs, &lLen, NULL, 0) != 0)
-	{
-		assert (false);
-		numCPUs = 1;		// Default value if we have an error in sysctl
-	}
+	numCPUs = 2;	// FIXME: do CPU detection once at startup.
 }
 
 Par2Repairer::~Par2Repairer(void)

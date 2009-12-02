@@ -29,6 +29,23 @@ static char THIS_FILE[]=__FILE__;
 #endif
 #endif
 
+static int detect_numCPU() {
+    // Autodetect the number of CPUs on a box, if available
+    // TODO: use x264's cpu.c.  It counts with in the affinity mask, to get the number of CPUs the scheduler will let us use!
+    int numCPU = 1;
+#if defined(__APPLE__)
+    // apparently this is good on Darwin.  pbzip2 uses this.
+    size_t len = sizeof(numCPU);
+    int mib[2] = { CTL_HW, HW_NCPU };
+    if (sysctl(mib, 2, &numCPU, &len, 0, 0) < 0 || len != sizeof(numCPU))
+	numCPU = 1;
+#elif defined(_SC_NPROCESSORS_ONLN)
+    numCPU = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+    return numCPU;
+}
+
+
 // Multiple thread support
 
 struct CreateThreadParams
@@ -74,14 +91,7 @@ Par2Creator::Par2Creator(void)
 {
 	// Some stuff for the multi-thread optimization
 	pthread_mutex_init (&progressMutex, NULL);
-	// Go and find number of CPU's in this machine
-	int lName [2] = { CTL_HW, HW_NCPU };
-	size_t lLen = sizeof (numCPUs);
-	if (sysctl(lName, 2, &numCPUs, &lLen, NULL, 0) != 0)
-	{
-		assert (false);
-		numCPUs = 1;		// Default value if we have an error in sysctl
-	}
+	numCPUs = detect_numCPU();
 }
 
 Par2Creator::~Par2Creator(void)
@@ -1018,7 +1028,7 @@ bool Par2Creator::CreateParityBlocks (size_t blocklength, u32 inputindex)
 	if (recoveryblockcount == 0)
 		return true;		// Nothing to do, actually
 	
-	bool rv = true;		// Optimistic default
+	bool rv = true;		// Optimistic default return value
 	pthread_t lSpawnedThreads [cMaxThreadsSupported - 1];
 	unsigned int lNumThreads = numCPUs;
 	if (lNumThreads > cMaxThreadsSupported)
@@ -1033,11 +1043,9 @@ bool Par2Creator::CreateParityBlocks (size_t blocklength, u32 inputindex)
 	while (lCurrentStartBlockNo < recoveryblockcount)
 	{
 		u32 lNextStartBlockNo = lCurrentStartBlockNo + lNumBlocksPerThread;
-		if (lNextStartBlockNo > recoveryblockcount)
-			lNextStartBlockNo = recoveryblockcount;		// Constrain
 		// The first bunches run in separate threads; the last one in the main thread.
-		if (lNextStartBlockNo == recoveryblockcount)
-		{
+		if (lNextStartBlockNo >= recoveryblockcount) {
+			lNextStartBlockNo = recoveryblockcount;		// Constrain
 			// This is the last one
 			this->CreateParityBlockRange (blocklength, inputindex, lCurrentStartBlockNo, lNextStartBlockNo);
 		}
